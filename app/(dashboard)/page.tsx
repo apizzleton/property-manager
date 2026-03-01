@@ -53,9 +53,9 @@ async function getDashboardStats() {
     where: { status: "active" },
     select: { monthlyRent: true },
   });
-  // Coerce Prisma values to numbers and keep reducer accumulator typed.
-  const monthlyIncome = activeLeases.reduce<number>(
-    (sum, lease) => sum + Number(lease.monthlyRent ?? 0),
+  // Explicit callback types keep strict TypeScript builds happy in CI.
+  const monthlyIncome = activeLeases.reduce(
+    (sum: number, lease: { monthlyRent: number | null }) => sum + Number(lease.monthlyRent ?? 0),
     0
   );
 

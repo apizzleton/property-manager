@@ -53,7 +53,11 @@ async function getDashboardStats() {
     where: { status: "active" },
     select: { monthlyRent: true },
   });
-  const monthlyIncome = activeLeases.reduce((sum, l) => sum + l.monthlyRent, 0);
+  // Coerce Prisma values to numbers and keep reducer accumulator typed.
+  const monthlyIncome = activeLeases.reduce<number>(
+    (sum, lease) => sum + Number(lease.monthlyRent ?? 0),
+    0
+  );
 
   return {
     propertyCount,

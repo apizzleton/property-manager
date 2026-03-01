@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
 import Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
 import { allocateOldestFirst, computeOutstandingBalance } from "@/lib/payments";
@@ -137,7 +136,7 @@ export async function POST(request: NextRequest) {
 
       summary.attempted += 1;
       const transferGroup = `autopay_${config.id}_${Date.now()}`;
-      const tenantPayment = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const tenantPayment = await prisma.$transaction(async (tx: any) => {
         const created = await tx.tenantPayment.create({
           data: {
             leaseId: config.leaseId,

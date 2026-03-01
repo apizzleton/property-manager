@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
 import type Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
 import { getDevActor } from "@/lib/devActor";
@@ -128,7 +127,7 @@ export async function POST(request: NextRequest) {
 
     const transferGroup = `tenant_payment_${Date.now()}_${actor.tenantId}`;
 
-    const payment = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const payment = await prisma.$transaction(async (tx: any) => {
       const created = await tx.tenantPayment.create({
         data: {
           leaseId: activeLease.id,
@@ -270,7 +269,7 @@ export async function POST(request: NextRequest) {
       });
     } catch (stripeError) {
       // Cleanup staged payment records if checkout creation fails.
-      await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await prisma.$transaction(async (tx: any) => {
         await tx.paymentAllocation.deleteMany({
           where: { tenantPaymentId: payment.id },
         });

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getDevActor } from "@/lib/devActor";
 import { allocateOldestFirst } from "@/lib/payments";
@@ -101,7 +100,7 @@ export async function POST(
         return NextResponse.json({ error: "No outstanding charges available to apply this amount" }, { status: 400 });
       }
 
-      const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const result = await prisma.$transaction(async (tx: any) => {
         const payment = await tx.tenantPayment.create({
           data: {
             leaseId,

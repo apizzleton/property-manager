@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getDevActor } from "@/lib/devActor";
 
@@ -54,7 +53,7 @@ export async function PUT(
       return NextResponse.json({ error: "Category already exists" }, { status: 409 });
     }
 
-    const updated = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const updated = await prisma.$transaction(async (tx: any) => {
       const categoryBefore = await tx.assetCategory.findUniqueOrThrow({ where: { id } });
       await tx.asset.updateMany({
         where: {

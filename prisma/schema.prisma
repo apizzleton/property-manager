@@ -1,12 +1,12 @@
 // Property Management App - Full Data Model
-// Uses SQLite locally; designed for easy migration to PostgreSQL/Supabase
+// PostgreSQL via Supabase
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 // ============================================================================

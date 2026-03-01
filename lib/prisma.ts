@@ -1,20 +1,16 @@
 /**
  * Prisma client singleton — prevents multiple instances during Next.js hot reload.
- * Uses better-sqlite3 adapter for Prisma v7 with SQLite.
+ * Uses the @prisma/adapter-pg driver adapter required by Prisma v7.
  */
 import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
-import path from "path";
-
-// Database file lives at project root: ./dev.db (matching .env DATABASE_URL)
-const dbPath = path.join(process.cwd(), "dev.db");
+import { PrismaPg } from "@prisma/adapter-pg";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
 function createPrismaClient() {
-  const adapter = new PrismaBetterSqlite3({ url: `file:${dbPath}` });
+  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
   return new PrismaClient({ adapter });
 }
 

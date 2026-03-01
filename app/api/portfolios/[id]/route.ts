@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getDevActor } from "@/lib/devActor";
 
@@ -78,7 +79,7 @@ export async function PUT(
         return NextResponse.json({ error: "One or more properties not found or not owned" }, { status: 400 });
       }
 
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         await tx.portfolioProperty.deleteMany({ where: { portfolioId: id } });
         if (ids.length > 0) {
           await tx.portfolioProperty.createMany({

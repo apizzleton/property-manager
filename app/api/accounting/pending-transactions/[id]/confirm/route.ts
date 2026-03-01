@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getDevActor } from "@/lib/devActor";
 import { buildConfirmationJournalLines } from "@/lib/payments";
@@ -20,7 +21,7 @@ export async function POST(
 
     const { id } = await params;
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const payment = await tx.tenantPayment.findUnique({
         where: { id },
         include: {

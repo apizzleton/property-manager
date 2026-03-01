@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
 import { allocateOldestFirst, computeOutstandingBalance } from "@/lib/payments";
@@ -50,6 +51,7 @@ export async function POST(request: NextRequest) {
       succeeded: 0,
       failed: 0,
       skipped: 0,
+      processing: 0,
     };
 
     for (const config of dueConfigs) {
@@ -135,7 +137,7 @@ export async function POST(request: NextRequest) {
 
       summary.attempted += 1;
       const transferGroup = `autopay_${config.id}_${Date.now()}`;
-      const tenantPayment = await prisma.$transaction(async (tx) => {
+      const tenantPayment = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         const created = await tx.tenantPayment.create({
           data: {
             leaseId: config.leaseId,
@@ -201,6 +203,7 @@ export async function POST(request: NextRequest) {
             });
 
         const paid = paymentIntent.status === "succeeded";
+        const processing = paymentIntent.status === "processing";
         await prisma.tenantPayment.update({
           where: { id: tenantPayment.id },
           data: {
@@ -219,8 +222,14 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        if (paid) summary.succeeded += 1;
-        else summary.failed += 1;
+        if (paid) {
+          summary.succeeded += 1;
+        } else if (processing) {
+          // ACH bank debits can remain in processing until Stripe settles asynchronously.
+          summary.processing += 1;
+        } else {
+          summary.failed += 1;
+        }
       } catch (error) {
         const message =
           error instanceof Stripe.errors.StripeError

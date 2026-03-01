@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import type Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
 import { getDevActor } from "@/lib/devActor";
@@ -127,7 +128,7 @@ export async function POST(request: NextRequest) {
 
     const transferGroup = `tenant_payment_${Date.now()}_${actor.tenantId}`;
 
-    const payment = await prisma.$transaction(async (tx) => {
+    const payment = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const created = await tx.tenantPayment.create({
         data: {
           leaseId: activeLease.id,
@@ -179,8 +180,9 @@ export async function POST(request: NextRequest) {
     }
 
     const appOrigin = process.env.NEXT_PUBLIC_APP_URL?.trim() || request.nextUrl.origin;
-    const successUrl = `${appOrigin}/dashboard?payment=success`;
-    const cancelUrl = `${appOrigin}/dashboard?payment=cancelled`;
+    // Route groups do not appear in URL paths, so dashboard root is "/".
+    const successUrl = `${appOrigin}/?payment=success`;
+    const cancelUrl = `${appOrigin}/?payment=cancelled`;
 
     let sessionId: string;
     let checkoutUrl: string;
@@ -268,7 +270,7 @@ export async function POST(request: NextRequest) {
       });
     } catch (stripeError) {
       // Cleanup staged payment records if checkout creation fails.
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         await tx.paymentAllocation.deleteMany({
           where: { tenantPaymentId: payment.id },
         });

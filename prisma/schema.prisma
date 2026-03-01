@@ -1,0 +1,608 @@
+// Property Management App - Full Data Model
+// Uses SQLite locally; designed for easy migration to PostgreSQL/Supabase
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ============================================================================
+// USER & AUTHENTICATION
+// ============================================================================
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         String   @default("landlord") // landlord, tenant, admin
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  properties             Property[]
+  portfolios             Portfolio[]
+  sentMessages           Message[]      @relation("SentMessages")
+  receivedMessages       Message[]      @relation("ReceivedMessages")
+  workOrdersCreated      WorkOrder[]    @relation("WorkOrderCreator")
+  workOrderActivities    WorkOrderActivity[] @relation("WorkOrderActivityCreator")
+  confirmedTenantPayments TenantPayment[] @relation("ConfirmedByUser")
+  assetCategories        AssetCategory[]
+  propertyManagerProfile PropertyManagerProfile?
+  tenant                 Tenant? // Optional link if user is a tenant
+}
+
+/// Contact profile shown in manager settings.
+model PropertyManagerProfile {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  mailingAddress String?
+  emailAddress   String?
+  phoneNumber    String?
+  emergencyNumber String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================================
+// PROPERTY MANAGEMENT
+// ============================================================================
+
+/// A portfolio property (can have multiple addresses and units)
+model Property {
+  id        String   @id @default(cuid())
+  name      String
+  type      String   @default("residential") // residential, commercial, mixed
+  notes     String?
+  userId    String
+  accountingBasis AccountingBasis @default(accrual)
+  stripeConnectAccountId      String?
+  stripeConnectChargesEnabled Boolean  @default(false)
+  stripeConnectPayoutsEnabled Boolean  @default(false)
+  stripeConnectDetailsSubmitted Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user                User               @relation(fields: [userId], references: [id])
+  addresses           Address[]
+  journalEntries      JournalEntry[]
+  messages           Message[]
+  documents          Document[]
+  ledgerCharges       LedgerCharge[]
+  tenantPayments      TenantPayment[]
+  autoPayConfigs      AutoPayConfig[]
+  portfolioProperties PortfolioProperty[]
+  assets              Asset[]
+}
+
+/// A portfolio grouping properties for filtering and reporting
+model Portfolio {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  userId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  properties PortfolioProperty[]
+
+  @@index([userId])
+}
+
+/// Join table: many-to-many between Portfolio and Property
+model PortfolioProperty {
+  portfolioId String
+  propertyId  String
+
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  property  Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([portfolioId, propertyId])
+  @@index([portfolioId])
+  @@index([propertyId])
+}
+
+/// A physical address belonging to a property
+model Address {
+  id         String   @id @default(cuid())
+  street     String
+  city       String
+  state      String
+  zip        String
+  propertyId String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  units    Unit[]
+}
+
+/// A rentable unit at a specific address
+model Unit {
+  id         String   @id @default(cuid())
+  unitNumber String
+  bedrooms   Int      @default(0)
+  bathrooms  Float    @default(1)
+  sqft       Float?
+  marketRent Float?
+  addressId  String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  address    Address     @relation(fields: [addressId], references: [id], onDelete: Cascade)
+  leases     Lease[]
+  workOrders WorkOrder[]
+  documents  Document[]
+  assets     Asset[]
+}
+
+enum AssetCondition {
+  new
+  good
+  fair
+  poor
+  needs_replacement
+}
+
+enum AssetEventType {
+  install
+  inspect
+  repair
+  replace
+  paint
+  flooring_update
+  other
+}
+
+/// User-managed category list for asset tracking.
+model AssetCategory {
+  id        String   @id @default(cuid())
+  name      String
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+/// A tracked asset at a property/building or specific unit.
+model Asset {
+  id           String         @id @default(cuid())
+  name         String
+  category     String
+  brand        String?
+  model        String?
+  serialNumber String?
+  installDate  DateTime?
+  condition    AssetCondition @default(good)
+  warrantyEnd  DateTime?
+  notes        String?
+  propertyId   String
+  unitId       String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  // Relations
+  property Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  unit     Unit?        @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  events   AssetEvent[]
+  notesLog AssetNote[]
+
+  @@index([propertyId])
+  @@index([unitId])
+  @@index([category])
+}
+
+/// Structured lifecycle activity for an asset (install, repair, replacement, etc).
+model AssetEvent {
+  id         String         @id @default(cuid())
+  assetId    String
+  eventType  AssetEventType
+  eventDate  DateTime
+  cost       Float?
+  vendorName String?
+  summary    String
+  details    String?
+  createdAt  DateTime       @default(now())
+
+  // Relations
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId])
+  @@index([eventDate])
+}
+
+/// Manual manager notes for a tracked asset.
+model AssetNote {
+  id       String   @id @default(cuid())
+  assetId  String
+  note     String
+  loggedAt DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  // Relations
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId])
+  @@index([loggedAt])
+}
+
+// ============================================================================
+// TENANT & LEASE MANAGEMENT
+// ============================================================================
+
+/// A tenant / renter
+model Tenant {
+  id               String   @id @default(cuid())
+  firstName        String
+  lastName         String
+  email            String?
+  phone            String?
+  emergencyContact String?
+  emergencyPhone   String?
+  notes            String?
+  userId           String?  @unique // Link to User if tenant has login
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  user          User?       @relation(fields: [userId], references: [id])
+  leases        Lease[]
+  workOrders    WorkOrder[]
+  documents     Document[]
+  ledgerCharges LedgerCharge[]
+  tenantPayments TenantPayment[]
+  autoPayConfigs AutoPayConfig[]
+}
+
+/// A lease agreement tying a tenant to a unit
+model Lease {
+  id          String    @id @default(cuid())
+  unitId      String
+  tenantId    String
+  startDate   DateTime
+  endDate     DateTime?
+  monthlyRent Float
+  deposit     Float     @default(0)
+  status      String    @default("active") // active, expired, terminated
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  unit          Unit           @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ledgerCharges LedgerCharge[]
+  tenantPayments TenantPayment[]
+  autoPayConfigs AutoPayConfig[]
+}
+
+// ============================================================================
+// TENANT LEDGER & PAYMENTS
+// ============================================================================
+
+enum LedgerChargeStatus {
+  unpaid
+  partially_paid
+  paid
+}
+
+enum TenantPaymentStatus {
+  pending_confirmation
+  confirmed
+  rejected
+}
+
+enum AccountingBasis {
+  cash
+  accrual
+}
+
+enum PaymentInitiatedByRole {
+  tenant
+  property_manager
+}
+
+/// A specific charge posted to a tenant ledger (e.g. monthly rent)
+model LedgerCharge {
+  id          String           @id @default(cuid())
+  leaseId      String
+  tenantId     String
+  propertyId   String
+  accountId    String
+  description  String
+  dueDate      DateTime
+  amount       Float
+  paidAmount   Float           @default(0)
+  status       LedgerChargeStatus @default(unpaid)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  // Relations
+  lease        Lease            @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  property     Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  account      Account          @relation(fields: [accountId], references: [id])
+  allocations  PaymentAllocation[]
+
+  @@index([tenantId, status])
+  @@index([leaseId, dueDate])
+}
+
+/// A tenant-initiated payment that requires PM confirmation before posting
+model TenantPayment {
+  id                String                @id @default(cuid())
+  leaseId            String
+  tenantId           String
+  propertyId         String
+  amount             Float
+  paymentProvider    String               @default("manual")
+  stripeCheckoutSessionId String?         @unique
+  stripePaymentIntentId String?
+  stripeSetupIntentId String?
+  stripeConnectedAccountId String?
+  stripeTransferGroup String?
+  stripeCustomerId String?
+  stripePaymentMethodId String?
+  stripePaymentStatus String?
+  stripeCustomerEmail String?
+  stripeLastEventId String?
+  processingAttemptCount Int              @default(0)
+  paymentCapturedAt  DateTime?
+  autoPayConfigId    String?
+  initiatedByRole    PaymentInitiatedByRole
+  initiatedFrom      String               @default("tenant_portal")
+  status             TenantPaymentStatus  @default(pending_confirmation)
+  memo               String?
+  submittedAt        DateTime             @default(now())
+  confirmedAt        DateTime?
+  confirmedByUserId  String?
+  journalEntryId     String?              @unique
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  // Relations
+  lease              Lease                @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  tenant             Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  property           Property             @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  confirmedByUser    User?                @relation("ConfirmedByUser", fields: [confirmedByUserId], references: [id])
+  journalEntry       JournalEntry?        @relation(fields: [journalEntryId], references: [id])
+  allocations        PaymentAllocation[]
+  autoPayConfig      AutoPayConfig?       @relation("AutoPayConfigPayments", fields: [autoPayConfigId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([status, submittedAt])
+  @@index([stripeConnectedAccountId])
+  @@index([paymentProvider, stripePaymentStatus])
+}
+
+/// Tenant-level AutoPay configuration for recurring rent runs.
+model AutoPayConfig {
+  id                     String   @id @default(cuid())
+  leaseId                String
+  tenantId               String
+  propertyId             String
+  enabled                Boolean  @default(false)
+  dayOfMonth             Int      @default(1)
+  maxAmount              Float?
+  stripeConnectedAccountId String?
+  stripeCustomerId       String?
+  stripePaymentMethodId  String?
+  nextRunAt              DateTime?
+  lastRunAt              DateTime?
+  lastStatus             String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  lease                  Lease    @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  tenant                 Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  property               Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  payments               TenantPayment[] @relation("AutoPayConfigPayments")
+
+  @@unique([leaseId, tenantId])
+  @@index([enabled, nextRunAt])
+  @@index([tenantId])
+}
+
+/// Idempotency record for webhook event processing.
+model StripeWebhookEvent {
+  id              String   @id
+  type            String
+  account         String?
+  tenantPaymentId String?
+  processedAt     DateTime @default(now())
+  createdAt       DateTime @default(now())
+}
+
+/// Allocation rows that apply payment amounts to specific charges
+model PaymentAllocation {
+  id              String        @id @default(cuid())
+  tenantPaymentId String
+  ledgerChargeId  String
+  allocatedAmount Float
+  allocationOrder Int
+  createdAt       DateTime      @default(now())
+
+  // Relations
+  tenantPayment   TenantPayment @relation(fields: [tenantPaymentId], references: [id], onDelete: Cascade)
+  ledgerCharge    LedgerCharge  @relation(fields: [ledgerChargeId], references: [id], onDelete: Cascade)
+
+  @@index([tenantPaymentId, allocationOrder])
+  @@index([ledgerChargeId])
+}
+
+// ============================================================================
+// DOUBLE-ENTRY ACCOUNTING
+// ============================================================================
+
+/// Chart of Accounts entry (hierarchical)
+model Account {
+  id            String   @id @default(cuid())
+  accountNumber String   @unique
+  name          String
+  type          String   // Asset, Liability, Equity, Revenue, Expense
+  subType       String?  // Current Asset, Fixed Asset, etc.
+  description   String?
+  isActive      Boolean  @default(true)
+  parentId      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations — hierarchical structure
+  parent            Account?           @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children          Account[]          @relation("AccountHierarchy")
+  journalEntryLines JournalEntryLine[]
+  ledgerCharges     LedgerCharge[]
+}
+
+/// A journal entry header (groups debit/credit lines)
+model JournalEntry {
+  id         String   @id @default(cuid())
+  date       DateTime
+  memo       String?
+  reference  String?  // Invoice #, check #, receipt #
+  propertyId String?
+  isPosted   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  property      Property?      @relation(fields: [propertyId], references: [id])
+  lines         JournalEntryLine[]
+  tenantPayment TenantPayment?
+}
+
+/// A single debit or credit line within a journal entry
+model JournalEntryLine {
+  id             String   @id @default(cuid())
+  journalEntryId String
+  accountId      String
+  debit          Float    @default(0)
+  credit         Float    @default(0)
+  description    String?
+  createdAt      DateTime @default(now())
+
+  // Relations
+  journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account      Account      @relation(fields: [accountId], references: [id])
+}
+
+// ============================================================================
+// MAINTENANCE & VENDORS
+// ============================================================================
+
+/// A maintenance/repair vendor
+model Vendor {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?
+  phone     String?
+  specialty String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  workOrders WorkOrder[]
+}
+
+/// A maintenance work order
+model WorkOrder {
+  id          String    @id @default(cuid())
+  unitId      String
+  tenantId    String?
+  vendorId    String?
+  title       String
+  description String?
+  priority    String    @default("medium") // low, medium, high, emergency
+  status      String    @default("open")   // open, in_progress, completed, closed
+  cost        Float?
+  createdById String?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  unit       Unit                @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  tenant     Tenant?             @relation(fields: [tenantId], references: [id])
+  vendor     Vendor?             @relation(fields: [vendorId], references: [id])
+  createdBy  User?               @relation("WorkOrderCreator", fields: [createdById], references: [id])
+  activities WorkOrderActivity[]
+}
+
+/// Timeline updates for a maintenance work order.
+/// tenantVisible controls whether a tenant should see this update.
+model WorkOrderActivity {
+  id            String   @id @default(cuid())
+  workOrderId   String
+  createdById   String?
+  message       String
+  tenantVisible Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  createdBy User?     @relation("WorkOrderActivityCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([workOrderId, createdAt])
+  @@index([tenantVisible])
+}
+
+// ============================================================================
+// COMMUNICATION / MESSAGING
+// ============================================================================
+
+/// A message between users (supports threading via parentId)
+model Message {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  propertyId String?
+  subject    String?
+  body       String
+  isRead     Boolean  @default(false)
+  parentId   String?  // For threading — references another Message
+  createdAt  DateTime @default(now())
+
+  // Relations
+  sender   User      @relation("SentMessages", fields: [senderId], references: [id])
+  receiver User      @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  property Property? @relation(fields: [propertyId], references: [id])
+  parent   Message?  @relation("MessageThread", fields: [parentId], references: [id])
+  replies  Message[] @relation("MessageThread")
+}
+
+// ============================================================================
+// DOCUMENT MANAGEMENT
+// ============================================================================
+
+/// An uploaded document/file associated with property, unit, or tenant
+model Document {
+  id         String   @id @default(cuid())
+  name       String
+  filePath   String
+  fileType   String?  // MIME type
+  fileSize   Int?     // Size in bytes
+  category   String?  // lease, receipt, inspection, photo, other
+  propertyId String?
+  unitId     String?
+  tenantId   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  property Property? @relation(fields: [propertyId], references: [id])
+  unit     Unit?     @relation(fields: [unitId], references: [id])
+  tenant   Tenant?   @relation(fields: [tenantId], references: [id])
+}

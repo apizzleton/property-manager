@@ -17,6 +17,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { formatCurrency } from "@/lib/utils";
+import { BrandLogo } from "@/components/branding/brand-logo";
 
 /* ============================================================================
    Properties List Page — shows all properties with quick stats
@@ -175,8 +176,12 @@ export default function PropertiesPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <p className="text-muted-foreground">Loading properties...</p>
+      <div className="flex flex-col items-center justify-center gap-4 py-20">
+        <BrandLogo variant="icon" size="lg" className="animate-pulse" />
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+          Loading properties...
+        </div>
       </div>
     );
   }

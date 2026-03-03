@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { BrandLogo } from "@/components/branding/brand-logo";
 import { fetchAssetCategories } from "@/lib/fetchAssetCategories";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
@@ -405,7 +406,13 @@ export default function AssetsPage() {
           </CardHeader>
           <CardContent className="space-y-2">
             {loading ? (
-              <p className="text-sm text-muted-foreground">Loading assets...</p>
+              <div className="flex items-center gap-3 py-6">
+                <BrandLogo variant="icon" size="sm" className="animate-pulse" />
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+                  Loading assets...
+                </div>
+              </div>
             ) : assets.length === 0 ? (
               <div className="rounded-xl border border-dashed p-6 text-center">
                 <ClipboardList className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />

@@ -40,8 +40,9 @@ export async function POST(request: NextRequest) {
     const link = await stripe.accountLinks.create({
       account: property.stripeConnectAccountId,
       type: "account_onboarding",
-      refresh_url: `${appOrigin}/dashboard/properties/${property.id}?stripe=refresh`,
-      return_url: `${appOrigin}/dashboard/properties/${property.id}?stripe=return`,
+      // Route groups do not appear in URL paths, so property detail is "/properties/:id".
+      refresh_url: `${appOrigin}/properties/${property.id}?stripe=refresh`,
+      return_url: `${appOrigin}/properties/${property.id}?stripe=return`,
     });
 
     return NextResponse.json({ url: link.url, expiresAt: link.expires_at });

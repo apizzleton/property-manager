@@ -120,6 +120,13 @@ export async function GET(request: NextRequest) {
       .filter((p) => p.status === "pending_confirmation")
       .reduce((sum, p) => sum + p.amount, 0);
     const outstandingCharges = computeOutstandingBalance(charges);
+    const totalChargeAmount = charges.reduce((sum, charge) => sum + charge.amount, 0);
+    const confirmedPaymentAmount = payments
+      .filter((p) => p.status === "confirmed")
+      .reduce((sum, p) => sum + p.amount, 0);
+    // Keep summary balance aligned with tenant ledger running balance:
+    // all confirmed payments reduce balance, including overpayments (negative balance).
+    const currentBalance = parseFloat((totalChargeAmount - confirmedPaymentAmount).toFixed(2));
 
     const upcomingCharges = charges
       .filter((charge) => charge.status !== "paid")
@@ -137,7 +144,7 @@ export async function GET(request: NextRequest) {
         propertyName: activeLease.unit.address.property.name,
       },
       summary: {
-        currentBalance: outstandingCharges,
+        currentBalance,
         outstandingCharges,
         pendingConfirmationAmount,
       },

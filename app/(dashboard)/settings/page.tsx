@@ -43,11 +43,8 @@ interface ContactInfo {
 }
 
 export default function SettingsPage() {
-  const [viewerRole, setViewerRole] = useState<"property_manager" | "tenant">(() => {
-    if (typeof document === "undefined") return "property_manager";
-    const match = document.cookie.match(/(?:^|;\s*)dev_role=([^;]+)/);
-    return match?.[1] === "tenant" ? "tenant" : "property_manager";
-  });
+  // Keep initial render deterministic for SSR + hydration, then sync cookie on mount.
+  const [viewerRole, setViewerRole] = useState<"property_manager" | "tenant">("property_manager");
 
   // Use DEFAULT_THEME_HEX for initial render to avoid hydration mismatch (readSavedThemeColor uses localStorage)
   const [themeColor, setThemeColor] = useState(() => DEFAULT_THEME_HEX);
@@ -103,7 +100,7 @@ export default function SettingsPage() {
   const resetTheme = () => {
     previewTheme(DEFAULT_THEME_HEX);
     saveThemeColor(DEFAULT_THEME_HEX);
-    setSavedMessage("Theme reset to default teal.");
+    setSavedMessage("Theme reset to default blue.");
   };
 
   // Fetch portfolios and properties for portfolio management

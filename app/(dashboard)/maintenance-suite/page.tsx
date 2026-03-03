@@ -10,6 +10,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
+import { BrandLogo } from "@/components/branding/brand-logo";
 
 interface TenantUnitOption {
   id: string;
@@ -104,8 +105,12 @@ export default function MaintenanceSuitePage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <p className="text-sm text-muted-foreground">Loading maintenance suite...</p>
+      <div className="flex flex-col items-center justify-center gap-4 py-20">
+        <BrandLogo variant="icon" size="lg" className="animate-pulse" />
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+          Loading maintenance suite...
+        </div>
       </div>
     );
   }

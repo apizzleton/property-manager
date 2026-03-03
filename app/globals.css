@@ -13,8 +13,8 @@
   --card-foreground: #1e293b;
   --popover: #edf2f9;
   --popover-foreground: #1e293b;
-  /* DoorLoop-style teal primary — fresh, professional SaaS feel */
-  --primary: #0d9488;
+  /* Blue primary default for property manager theme */
+  --primary: #2563eb;
   --primary-foreground: #ffffff;
   --secondary: #dde5ef;
   --secondary-foreground: #475569;
@@ -30,7 +30,7 @@
   --warning-foreground: #ffffff;
   --border: #cfd9e6;
   --input: #cfd9e6;
-  --ring: #0d9488;
+  --ring: #2563eb;
   --radius: 0.75rem;
   --sidebar-width: 16rem;
   --sidebar-bg: #eaf0f7;
@@ -47,7 +47,7 @@
   --card-foreground: #f8fafc;
   --popover: #182235;
   --popover-foreground: #f8fafc;
-  --primary: #14b8a6;
+  --primary: #2563eb;
   --primary-foreground: #ffffff;
   --secondary: #1a263a;
   --secondary-foreground: #f8fafc;
@@ -63,7 +63,7 @@
   --warning-foreground: #fffbeb;
   --border: #2f3f58;
   --input: #2f3f58;
-  --ring: #14b8a6;
+  --ring: #2563eb;
   --sidebar-bg: #111d30;
   --sidebar-border: #2f3f58;
   --neo-shadow-raised-sm: 4px 4px 10px #0a1222, -4px -4px 10px #1a2b45;

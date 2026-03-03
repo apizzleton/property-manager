@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
 import { getStripeClient, getStripeWebhookSecret } from "@/lib/stripe";
+import { syncTenantPaymentFromCheckoutSession } from "@/lib/stripe-payment-sync";
 
 /**
  * Stripe webhook handler for tenant checkout sessions.
@@ -36,6 +37,7 @@ export async function POST(request: NextRequest) {
         "code" in error &&
         (error as { code?: string }).code === "P2002"
       ) {
+        console.info("Stripe webhook duplicate ignored", { eventId: event.id, type: event.type, account: eventAccount });
         return NextResponse.json({ received: true, duplicate: true });
       }
       throw error;
@@ -46,44 +48,13 @@ export async function POST(request: NextRequest) {
         const session = event.data.object as Stripe.Checkout.Session;
         const tenantPaymentId = session.metadata?.tenantPaymentId;
         if (!tenantPaymentId) break;
-
-        let stripePaymentMethodId: string | null = null;
-        let stripeCustomerId: string | null =
-          typeof session.customer === "string" ? session.customer : null;
-        const paymentIntentId =
-          typeof session.payment_intent === "string" ? session.payment_intent : null;
-
-        if (paymentIntentId) {
-          const paymentIntent = eventAccount
-            ? await stripe.paymentIntents.retrieve(paymentIntentId, {}, { stripeAccount: eventAccount })
-            : await stripe.paymentIntents.retrieve(paymentIntentId);
-          stripePaymentMethodId =
-            typeof paymentIntent.payment_method === "string"
-              ? paymentIntent.payment_method
-              : paymentIntent.payment_method?.id || null;
-          if (!stripeCustomerId) {
-            stripeCustomerId =
-              typeof paymentIntent.customer === "string"
-                ? paymentIntent.customer
-                : paymentIntent.customer?.id || null;
-          }
-        }
-
-        await prisma.tenantPayment.updateMany({
-          where: { id: tenantPaymentId },
-          data: {
-            stripeCheckoutSessionId: session.id,
-            stripePaymentIntentId: paymentIntentId,
-            stripeConnectedAccountId: eventAccount,
-            stripeCustomerId,
-            stripePaymentMethodId,
-            stripePaymentStatus:
-              session.payment_status === "unpaid" ? "processing" : session.payment_status || "paid",
-            stripeCustomerEmail: session.customer_details?.email || null,
-            stripeLastEventId: event.id,
-            paymentCapturedAt: session.payment_status === "paid" ? new Date() : null,
-          },
+        const result = await syncTenantPaymentFromCheckoutSession({
+          tenantPaymentId,
+          session,
+          stripeAccountId: eventAccount,
+          eventId: event.id,
         });
+        console.info("Stripe webhook checkout.session.completed synced", { eventId: event.id, ...result });
         await prisma.stripeWebhookEvent.update({
           where: { id: event.id },
           data: { tenantPaymentId },
@@ -94,18 +65,13 @@ export async function POST(request: NextRequest) {
         const session = event.data.object as Stripe.Checkout.Session;
         const tenantPaymentId = session.metadata?.tenantPaymentId;
         if (!tenantPaymentId) break;
-
-        await prisma.tenantPayment.updateMany({
-          where: { id: tenantPaymentId },
-          data: {
-            stripeCheckoutSessionId: session.id,
-            stripeConnectedAccountId: eventAccount,
-            stripePaymentStatus: "paid",
-            stripeCustomerEmail: session.customer_details?.email || null,
-            stripeLastEventId: event.id,
-            paymentCapturedAt: new Date(),
-          },
+        const result = await syncTenantPaymentFromCheckoutSession({
+          tenantPaymentId,
+          session,
+          stripeAccountId: eventAccount,
+          eventId: event.id,
         });
+        console.info("Stripe webhook async success synced", { eventId: event.id, ...result });
         await prisma.stripeWebhookEvent.update({
           where: { id: event.id },
           data: { tenantPaymentId },
@@ -117,19 +83,14 @@ export async function POST(request: NextRequest) {
         const session = event.data.object as Stripe.Checkout.Session;
         const tenantPaymentId = session.metadata?.tenantPaymentId;
         if (!tenantPaymentId) break;
-
-        await prisma.tenantPayment.updateMany({
-          where: { id: tenantPaymentId, status: "pending_confirmation" },
-          data: {
-            stripeCheckoutSessionId: session.id,
-            stripeConnectedAccountId: eventAccount,
-            stripePaymentStatus:
-              event.type === "checkout.session.expired" ? "expired" : "failed",
-            status: "rejected",
-            confirmedAt: new Date(),
-            stripeLastEventId: event.id,
-          },
+        const result = await syncTenantPaymentFromCheckoutSession({
+          tenantPaymentId,
+          session,
+          stripeAccountId: eventAccount,
+          eventId: event.id,
+          forceStatus: event.type === "checkout.session.expired" ? "expired" : "failed",
         });
+        console.info("Stripe webhook async failure synced", { eventId: event.id, ...result });
         await prisma.stripeWebhookEvent.update({
           where: { id: event.id },
           data: { tenantPaymentId },

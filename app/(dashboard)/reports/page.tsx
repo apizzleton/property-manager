@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { BarChart3 } from "lucide-react";
+import { BarChart3, FileSpreadsheet, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,15 @@ interface Property { id: string; name: string; }
 interface Portfolio { id: string; name: string; propertyIds: string[]; }
 interface Account { id: string; accountNumber: string; name: string; }
 type DatePreset = "mtd" | "qtd" | "ytd" | "last_30" | "last_90" | "all_time" | "custom";
+type ExportCell = string | number;
+type ExportPayload = {
+  title: string;
+  subtitle?: string;
+  sheetName: string;
+  headers: string[];
+  rows: ExportCell[][];
+  footerRows?: ExportCell[][];
+};
 
 function toDateInputValue(date: Date) {
   return date.toISOString().split("T")[0];
@@ -100,6 +109,7 @@ export default function ReportsPage() {
   const [rentRoll, setRentRoll] = useState<Record<string, unknown> | null>(null);
   const [generalLedger, setGeneralLedger] = useState<Record<string, unknown> | null>(null);
   const [glAccountId, setGlAccountId] = useState("");
+  const [exporting, setExporting] = useState<null | "pdf" | "excel">(null);
 
   // Fetch reference data on mount
   useEffect(() => {
@@ -166,6 +176,168 @@ export default function ReportsPage() {
   const effectiveRange = resolveDateRange(datePreset, startDate, endDate);
   const balanceSheetAsOf = effectiveRange.end || toDateInputValue(new Date());
   const showRangeFilters = activeTab !== "rent-roll";
+  const dateSuffix = toDateInputValue(new Date());
+
+  // Normalize each report into one table model that powers both PDF and Excel exports.
+  const getActiveExportPayload = (): ExportPayload | null => {
+    switch (activeTab) {
+      case "trial-balance":
+        if (!tb) return null;
+        return {
+          title: "Trial Balance",
+          subtitle: effectiveRange.label,
+          sheetName: "Trial Balance",
+          headers: ["Account #", "Account Name", "Type", "Debit", "Credit"],
+          rows: tb.rows.map((r) => [r.accountNumber, r.accountName, r.type, r.debit, r.credit]),
+          footerRows: [["Totals", "", "", tb.totalDebits, tb.totalCredits]],
+        };
+      case "profit-loss":
+        if (!pl) return null;
+        return {
+          title: "Profit & Loss Statement",
+          subtitle: effectiveRange.label,
+          sheetName: "Profit & Loss",
+          headers: ["Account #", "Account Name", "Category", "Amount"],
+          rows: [
+            ...pl.revenue.map((r) => [r.number, r.name, "Revenue", r.amount]),
+            ...pl.expenses.map((r) => [r.number, r.name, "Expense", r.amount]),
+          ],
+          footerRows: [
+            ["", "", "Total Revenue", pl.totalRevenue],
+            ["", "", "Total Expenses", pl.totalExpenses],
+            ["", "", "Net Income", pl.netIncome],
+          ],
+        };
+      case "balance-sheet":
+        if (!bs) return null;
+        return {
+          title: "Balance Sheet",
+          subtitle: `As of ${balanceSheetAsOf}`,
+          sheetName: "Balance Sheet",
+          headers: ["Account #", "Account Name", "Section", "Amount"],
+          rows: [
+            ...bs.assets.map((r) => [r.number, r.name, "Asset", r.amount]),
+            ...bs.liabilities.map((r) => [r.number, r.name, "Liability", r.amount]),
+            ...bs.equity.map((r) => [r.number, r.name, "Equity", r.amount]),
+          ],
+          footerRows: [
+            ["", "", "Total Assets", bs.totalAssets],
+            ["", "", "Total Liabilities", bs.totalLiabilities],
+            ["", "", "Total Equity", bs.totalEquity],
+            ["", "", "Liabilities + Equity", bs.totalLiabilities + bs.totalEquity],
+          ],
+        };
+      case "cash-flow":
+        if (!cf) return null;
+        return {
+          title: "Cash Flow Statement",
+          subtitle: effectiveRange.label,
+          sheetName: "Cash Flow",
+          headers: ["Date", "Description", "Category", "Amount"],
+          rows: cf.details.map((d) => [formatDate(d.date), d.memo, d.category, d.amount]),
+          footerRows: [
+            ["", "Operating", "", cf.operating],
+            ["", "Investing", "", cf.investing],
+            ["", "Financing", "", cf.financing],
+            ["", "Net Change", "", cf.netChange],
+          ],
+        };
+      case "general-ledger":
+        if (!gl || gl.lines.length === 0) return null;
+        return {
+          title: "General Ledger",
+          subtitle: effectiveRange.label,
+          sheetName: "General Ledger",
+          headers: ["Date", "Account", "Memo", "Reference", "Property", "Description", "Debit", "Credit"],
+          rows: gl.lines.map((l) => [
+            formatDate(l.journalEntry.date),
+            `${l.account.accountNumber} - ${l.account.name}`,
+            l.journalEntry.memo || "",
+            l.journalEntry.reference || "",
+            l.journalEntry.property?.name || "",
+            l.description || "",
+            l.debit,
+            l.credit,
+          ]),
+        };
+      case "rent-roll":
+        if (!rr) return null;
+        return {
+          title: "Rent Roll",
+          subtitle: `As of ${formatDate(rr.asOfDate)}`,
+          sheetName: "Rent Roll",
+          headers: ["Property", "Address", "Unit", "Tenant", "Monthly Rent", "Deposit", "Lease Start", "Lease End"],
+          rows: rr.rows.map((r) => [
+            r.property,
+            r.address,
+            r.unit,
+            r.tenant,
+            r.monthlyRent,
+            r.deposit,
+            formatDate(r.leaseStart),
+            r.leaseEnd ? formatDate(r.leaseEnd) : "Month-to-month",
+          ]),
+          footerRows: [["Totals", "", "", "", rr.totalMonthlyRent, "", "", `Annual: ${rr.annualizedRent}`]],
+        };
+      default:
+        return null;
+    }
+  };
+
+  const getExportFileBaseName = () => `report-${activeTab}-${dateSuffix}`;
+
+  const exportToExcel = async () => {
+    const payload = getActiveExportPayload();
+    if (!payload) return;
+    setExporting("excel");
+    try {
+      const XLSX = await import("xlsx");
+      const rows = [payload.headers, ...payload.rows, ...(payload.footerRows || [])];
+      const worksheet = XLSX.utils.aoa_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, payload.sheetName);
+      XLSX.writeFile(workbook, `${getExportFileBaseName()}.xlsx`);
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  const exportToPdf = async () => {
+    const payload = getActiveExportPayload();
+    if (!payload) return;
+    setExporting("pdf");
+    try {
+      const [{ default: JsPDF }, { default: autoTable }] = await Promise.all([
+        import("jspdf"),
+        import("jspdf-autotable"),
+      ]);
+      const doc = new JsPDF({
+        orientation: payload.headers.length >= 7 ? "landscape" : "portrait",
+      });
+      doc.setFontSize(14);
+      doc.text(payload.title, 14, 16);
+      let startY = 24;
+      if (payload.subtitle) {
+        doc.setFontSize(10);
+        doc.text(payload.subtitle, 14, 22);
+        startY = 28;
+      }
+      autoTable(doc, {
+        startY,
+        head: [payload.headers],
+        body: payload.rows,
+        foot: payload.footerRows,
+        theme: "striped",
+        styles: { fontSize: 8 },
+      });
+      doc.save(`${getExportFileBaseName()}.pdf`);
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  const exportPayload = getActiveExportPayload();
+  const exportDisabled = loading || exporting !== null || !exportPayload;
 
   return (
     <div className="space-y-4">
@@ -232,6 +404,24 @@ export default function ReportsPage() {
                 {propertyOptions.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </Select>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportToPdf}
+              disabled={exportDisabled}
+            >
+              <FileText className="mr-1 h-4 w-4" />
+              Export PDF
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportToExcel}
+              disabled={exportDisabled}
+            >
+              <FileSpreadsheet className="mr-1 h-4 w-4" />
+              Export Excel
+            </Button>
           </div>
         </div>
 

@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import { BrandLogo } from "@/components/branding/brand-logo";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -346,7 +347,15 @@ export default function PropertyDetailPage() {
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center py-20"><p className="text-muted-foreground">Loading...</p></div>;
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 py-20">
+        <BrandLogo variant="icon" size="lg" className="animate-pulse" />
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+          Loading property...
+        </div>
+      </div>
+    );
   }
 
   if (!property) {

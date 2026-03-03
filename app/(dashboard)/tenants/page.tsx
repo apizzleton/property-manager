@@ -19,6 +19,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { formatCurrency } from "@/lib/utils";
+import { BrandLogo } from "@/components/branding/brand-logo";
 
 /* ============================================================================
    Tenants Page — list all tenants, manage leases
@@ -182,7 +183,15 @@ export default function TenantsPage() {
   });
 
   if (loading) {
-    return <div className="flex items-center justify-center py-20"><p className="text-muted-foreground">Loading tenants...</p></div>;
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 py-20">
+        <BrandLogo variant="icon" size="lg" className="animate-pulse" />
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+          Loading tenants...
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -255,7 +264,9 @@ export default function TenantsPage() {
                   return (
                     <TableRow key={tenant.id}>
                       <TableCell>
-                        <div className="font-medium">{tenant.firstName} {tenant.lastName}</div>
+                        <Link href={`/tenants/${tenant.id}`} className="font-medium hover:text-primary hover:underline">
+                          {tenant.firstName} {tenant.lastName}
+                        </Link>
                         {tenant.notes && (
                           <div className="flex items-center gap-1 text-xs text-muted-foreground">
                             <FileText className="h-3 w-3" /> {tenant.notes.slice(0, 40)}{tenant.notes.length > 40 ? "..." : ""}

@@ -15,11 +15,14 @@ import {
   ClipboardList,
   MessageSquare,
   FileText,
+  CreditCard,
+  Phone,
   Settings,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BrandLogo } from "@/components/branding/brand-logo";
 
 /* ============================================================================
    Sidebar Component — DoorLoop-inspired clean navigation
@@ -32,11 +35,10 @@ interface NavItem {
   label: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
-  role: NavRole;
+  role?: NavRole;
 }
 
-// Navigation items with icons and paths
-const navItems = [
+const managerNavItems: NavItem[] = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard, role: "all" },
   { label: "Messages", href: "/messages", icon: MessageSquare, role: "all" },
   { label: "Properties", href: "/properties", icon: Building2, role: "property_manager" },
@@ -46,11 +48,19 @@ const navItems = [
   { label: "Accounting", href: "/accounting", icon: Calculator, role: "property_manager" },
   { label: "Reports", href: "/reports", icon: BarChart3, role: "property_manager" },
   { label: "Maintenance", href: "/maintenance", icon: Wrench, role: "property_manager" },
-  { label: "Maintenance Suite", href: "/maintenance-suite", icon: Wrench, role: "tenant" },
   { label: "Asset Management", href: "/assets", icon: ClipboardList, role: "property_manager" },
   { label: "Documents", href: "/documents", icon: FileText, role: "property_manager" },
-  { label: "Settings", href: "/settings", icon: Settings, role: "all" },
-] satisfies NavItem[];
+  { label: "Settings", href: "/settings", icon: Settings, role: "property_manager" },
+];
+
+const tenantNavItems: NavItem[] = [
+  { label: "Dashboard", href: "/", icon: LayoutDashboard },
+  { label: "Messages", href: "/messages", icon: MessageSquare },
+  { label: "Maintenance", href: "/maintenance-suite", icon: Wrench },
+  { label: "Transactions", href: "/transactions", icon: CreditCard },
+  { label: "Lease Summary", href: "/lease-summary", icon: FileText },
+  { label: "Contact Info", href: "/contact-info", icon: Phone },
+];
 
 interface SidebarProps {
   collapsed: boolean;
@@ -61,9 +71,9 @@ interface SidebarProps {
 export function Sidebar({ collapsed, onToggle, role }: SidebarProps) {
   const pathname = usePathname();
 
-  const visibleNavItems = navItems.filter((item) => (
-    item.role === "all" || item.role === role
-  ));
+  const visibleNavItems = role === "tenant"
+    ? tenantNavItems
+    : managerNavItems.filter((item) => item.role === "all" || item.role === role);
 
   return (
     <aside
@@ -73,16 +83,12 @@ export function Sidebar({ collapsed, onToggle, role }: SidebarProps) {
         collapsed ? "w-16" : "w-64"
       )}
     >
-      {/* Logo / App Name — DoorLoop-style clean header */}
+      {/* Logo / App Name */}
       <div className="flex h-14 items-center border-b border-[var(--sidebar-border)]/80 px-4">
         <Link href="/" className="flex items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/70 shadow-md shadow-primary/25">
-            <Building2 className="h-5 w-5 text-primary-foreground" />
-          </div>
+          <BrandLogo variant="icon" size="md" priority />
           {!collapsed && (
-            <span className="text-base font-semibold tracking-tight text-foreground">
-              PropManager
-            </span>
+            <BrandLogo variant="full" size="sm" className="max-w-[170px]" />
           )}
         </Link>
       </div>

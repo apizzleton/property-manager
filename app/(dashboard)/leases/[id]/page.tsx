@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { LedgerTable, type LedgerTableRow } from "@/components/ledger/ledger-table";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { BrandLogo } from "@/components/branding/brand-logo";
 
 /* ============================================================================
    Lease Detail Page — PM view with Details and Ledger tabs
@@ -295,8 +296,12 @@ export default function LeaseDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <p className="text-muted-foreground">Loading lease...</p>
+      <div className="flex flex-col items-center justify-center gap-4 py-20">
+        <BrandLogo variant="icon" size="lg" className="animate-pulse" />
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+          Loading lease...
+        </div>
       </div>
     );
   }
@@ -449,8 +454,12 @@ export default function LeaseDetailPage() {
         {/* ── Ledger Tab ────────────────────────────────────────────────── */}
         <TabsContent value="ledger" className="mt-6">
           {ledgerLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <p className="text-muted-foreground">Loading ledger...</p>
+            <div className="flex flex-col items-center justify-center gap-3 py-12">
+              <BrandLogo variant="icon" size="md" className="animate-pulse" />
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+                Loading ledger...
+              </div>
             </div>
           ) : ledger ? (
             <div className="space-y-6">

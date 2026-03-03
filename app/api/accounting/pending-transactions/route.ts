@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getDevActor } from "@/lib/devActor";
 import { resolvePropertyIdsForFilter } from "@/lib/portfolioScope";
+import { reconcileStaleStripePayments } from "@/lib/stripe-payment-sync";
 
 /**
  * GET /api/accounting/pending-transactions
@@ -27,6 +28,15 @@ export async function GET(request: NextRequest) {
       }
     } else if (propertyId) {
       propertyFilter = { propertyId };
+    }
+
+    // Bounded reconciliation heals stale Stripe rows before PM queue is read.
+    const reconcileSummary = await reconcileStaleStripePayments({
+      limit: 25,
+      minAgeMinutes: 2,
+    });
+    if (reconcileSummary.synced > 0 || reconcileSummary.errors > 0) {
+      console.info("Pending transactions pre-read reconciliation", reconcileSummary);
     }
 
     const transactions = await prisma.tenantPayment.findMany({

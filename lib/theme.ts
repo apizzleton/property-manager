@@ -1,9 +1,9 @@
 export const THEME_STORAGE_KEY = "pmapp-theme-color";
-export const DEFAULT_THEME_HEX = "#0d9488";
+export const DEFAULT_THEME_HEX = "#2563eb";
 
 export const THEME_PRESETS = [
-  { label: "Teal (Default)", value: "#0d9488" },
-  { label: "Blue", value: "#2563eb" },
+  { label: "Blue (Default)", value: "#2563eb" },
+  { label: "Teal", value: "#0d9488" },
   { label: "Indigo", value: "#4f46e5" },
   { label: "Violet", value: "#7c3aed" },
   { label: "Rose", value: "#e11d48" },

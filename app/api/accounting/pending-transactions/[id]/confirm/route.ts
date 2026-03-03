@@ -78,6 +78,29 @@ export async function POST(
           });
         }
       }
+      const allocatedTotal = payment.allocations.reduce(
+        (sum: number, allocation: any) => sum + allocation.allocatedAmount,
+        0
+      );
+      const unappliedAmount = parseFloat(Math.max(0, payment.amount - allocatedTotal).toFixed(2));
+      if (unappliedAmount > 0) {
+        const rentReceivable = await tx.account.findUnique({
+          where: { accountNumber: "1210" },
+        });
+        if (!rentReceivable) {
+          throw new Error("Rent Receivable account (1210) not found");
+        }
+        const existing = revenueByAccount.get(rentReceivable.id);
+        if (existing) {
+          existing.amount += unappliedAmount;
+        } else {
+          revenueByAccount.set(rentReceivable.id, {
+            accountNumber: rentReceivable.accountNumber,
+            accountName: rentReceivable.name,
+            amount: unappliedAmount,
+          });
+        }
+      }
 
       const journalLines = buildConfirmationJournalLines(
         settlementAccount.id,
@@ -88,6 +111,9 @@ export async function POST(
           amount: value.amount,
         }))
       );
+      if (journalLines.length === 0) {
+        throw new Error("No accounting lines were generated for this payment");
+      }
 
       if (!isBalanced(journalLines)) {
         throw new Error("Generated journal lines are not balanced");

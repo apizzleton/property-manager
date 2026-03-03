@@ -20,6 +20,25 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "PropManager — Property Management",
   description: "Full-featured property management application with double-entry accounting",
+  icons: {
+    icon: [
+      { url: "/brand/logo-mark.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico" },
+    ],
+    shortcut: "/brand/logo-mark.svg",
+    apple: "/apple-icon.svg",
+  },
+  openGraph: {
+    title: "PropManager — Property Management",
+    description: "Full-featured property management application with double-entry accounting",
+    images: ["/brand/logo-full.svg"],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "PropManager — Property Management",
+    description: "Full-featured property management application with double-entry accounting",
+    images: ["/brand/logo-full.svg"],
+  },
 };
 
 export default function RootLayout({

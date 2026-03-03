@@ -4,7 +4,7 @@ import { getDevActor } from "@/lib/devActor";
 
 /**
  * GET /api/settings/contact-info
- * Returns contact info for the current property manager.
+ * Returns contact info configured by the property manager.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -12,17 +12,27 @@ export async function GET(request: NextRequest) {
     if (!actor) {
       return NextResponse.json({ error: "No development user found. Run the seed script." }, { status: 400 });
     }
-    if (actor.effectiveRole !== "property_manager") {
-      return NextResponse.json({ error: "Only property managers can view contact info" }, { status: 403 });
+    // Tenant portal should display manager contact details, so GET is shared.
+    const managerUser =
+      actor.effectiveRole === "property_manager"
+        ? actor.user
+        : await prisma.user.findFirst({
+            where: { role: { in: ["landlord", "admin"] } },
+            orderBy: { createdAt: "asc" },
+            select: { id: true, email: true },
+          });
+
+    if (!managerUser) {
+      return NextResponse.json({ error: "No property manager account found" }, { status: 404 });
     }
 
     const profile = await prisma.propertyManagerProfile.findUnique({
-      where: { userId: actor.user.id },
+      where: { userId: managerUser.id },
     });
 
     return NextResponse.json({
       mailingAddress: profile?.mailingAddress ?? "",
-      emailAddress: profile?.emailAddress ?? actor.user.email ?? "",
+      emailAddress: profile?.emailAddress ?? managerUser.email ?? "",
       phoneNumber: profile?.phoneNumber ?? "",
       emergencyNumber: profile?.emergencyNumber ?? "",
     });

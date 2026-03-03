@@ -78,21 +78,9 @@ export async function POST(request: NextRequest) {
     });
 
     const outstanding = computeOutstandingBalance(openCharges);
-    if (outstanding <= 0) {
-      return NextResponse.json({ error: "No outstanding charges to pay" }, { status: 400 });
-    }
+    const submittedAmount = parseFloat(amount.toFixed(2));
 
-    if (amount > outstanding + 0.01) {
-      return NextResponse.json(
-        { error: `Payment exceeds outstanding balance (${outstanding.toFixed(2)})` },
-        { status: 400 }
-      );
-    }
-
-    const allocation = allocateOldestFirst(openCharges, amount);
-    if (allocation.appliedAmount <= 0 || allocation.allocations.length === 0) {
-      return NextResponse.json({ error: "Unable to allocate payment to charges" }, { status: 400 });
-    }
+    const allocation = allocateOldestFirst(openCharges, submittedAmount);
 
     let stripeCustomerId =
       (
@@ -133,7 +121,7 @@ export async function POST(request: NextRequest) {
           leaseId: activeLease.id,
           tenantId: actor.tenantId!,
           propertyId: activeLease.unit.address.property.id,
-          amount: allocation.appliedAmount,
+          amount: submittedAmount,
           paymentProvider: "stripe",
           stripeConnectedAccountId: usePlatformFallback ? null : connectedAccountId,
           stripeCustomerId,
@@ -147,14 +135,16 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      await tx.paymentAllocation.createMany({
-        data: allocation.allocations.map((item) => ({
-          tenantPaymentId: created.id,
-          ledgerChargeId: item.ledgerChargeId,
-          allocatedAmount: item.allocatedAmount,
-          allocationOrder: item.allocationOrder,
-        })),
-      });
+      if (allocation.allocations.length > 0) {
+        await tx.paymentAllocation.createMany({
+          data: allocation.allocations.map((item) => ({
+            tenantPaymentId: created.id,
+            ledgerChargeId: item.ledgerChargeId,
+            allocatedAmount: item.allocatedAmount,
+            allocationOrder: item.allocationOrder,
+          })),
+        });
+      }
 
       return tx.tenantPayment.findUnique({
         where: { id: created.id },
@@ -179,14 +169,15 @@ export async function POST(request: NextRequest) {
     }
 
     const appOrigin = process.env.NEXT_PUBLIC_APP_URL?.trim() || request.nextUrl.origin;
-    // Route groups do not appear in URL paths, so dashboard root is "/".
-    const successUrl = `${appOrigin}/?payment=success`;
-    const cancelUrl = `${appOrigin}/?payment=cancelled`;
+    // Route groups do not appear in URL paths. Return to transactions so we can
+    // immediately sync checkout status in-app even when webhooks are unavailable.
+    const successUrl = `${appOrigin}/transactions?payment=success&session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${appOrigin}/transactions?payment=cancelled`;
 
     let sessionId: string;
     let checkoutUrl: string;
     try {
-      const totalAmountCents = Math.round(allocation.appliedAmount * 100);
+      const totalAmountCents = Math.round(submittedAmount * 100);
       const applicationFeeAmount = toStripeFeeAmount(totalAmountCents);
       const checkoutPaymentMethods = getCheckoutPaymentMethodTypes();
       const sessionCreateParams: Stripe.Checkout.SessionCreateParams = {
@@ -289,8 +280,9 @@ export async function POST(request: NextRequest) {
         usedPlatformFallback: usePlatformFallback,
         summary: {
           outstandingBefore: outstanding,
-          submittedAmount: amount,
+          submittedAmount,
           appliedAmount: allocation.appliedAmount,
+          unallocatedAmount: allocation.unallocatedAmount,
         },
       },
       { status: 201 }
